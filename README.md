@@ -35,7 +35,7 @@ DATABASE_URL=postgres://user:pass@host/dbname
 DB_NAME=test
 DB_USER=test
 DB_HOST=test
-DB_PASS=test
+USER_PASS=test
 ```
 
 ## Deploy

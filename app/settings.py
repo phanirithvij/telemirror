@@ -42,9 +42,10 @@ if CM is not None:
 
 TIMEOUT_MIRRORING = float(environ.get('TIMEOUT_MIRRORING', '0.1'))
 # amount messages before timeout
-LIMIT_TO_WAIT = 50
+LIMIT_TO_WAIT = 20
 # auth session string: can be obtain by run login.py
 SESSION_STRING = environ.get('SESSION_STRING')
+BOT_TOKEN = environ.get('BOT_TOKEN')
 
 # remove urls from messages
 REMOVE_URLS = str2bool(environ.get('REMOVE_URLS', 'False'))
@@ -59,10 +60,10 @@ DB_URL = environ.get('DATABASE_URL')
 # or postgres credentials
 DB_NAME = environ.get("DB_NAME")
 DB_USER = environ.get("DB_USER")
-DB_PASS = environ.get("DB_PASS")
+USER_PASS = environ.get("USER_PASS")
 DB_HOST = environ.get("DB_HOST")
 # if connection string wasnt set then build it from credentials
 if DB_URL is None:
-    DB_URL = f"postgres://{DB_USER}:{DB_PASS}@{DB_HOST}/{DB_NAME}"
+    DB_URL = f"postgres://{DB_USER}:{USER_PASS}@{DB_HOST}/{DB_NAME}"
 
 LOG_LEVEL = environ.get("LOG_LEVEL", "INFO").upper()
