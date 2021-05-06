@@ -15,7 +15,9 @@ from app.settings import (API_HASH, API_ID, BOT_TOKEN, CHANNEL_MAPPING, CHATS,
 
 print(CHATS, CHANNEL_MAPPING)
 
-# -1001223189644 -> Distant Lands
+DistantLands = -1001223189644
+DistantLandsBackup = -1001235606765
+Currenttestchannel = -1001393493900  # (telemirror)
 
 # user account
 client = TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH)
@@ -36,8 +38,10 @@ async def start(event):
 async def echo(event: events.NewMessage.Event):
     """Echo the user message."""
     try:
-        print(event.message)
-        await event.respond(event.message)
+        pass
+        # ignore for now
+        # print("bot new msg", event.message)
+        # await event.respond(event.message)
     except Exception as e:
         print(e)
 
@@ -51,13 +55,15 @@ async def get_channels(owned=False):
             if owned and dialog.entity.admin_rights is not None:
                 print(dialog.name, dialog.id)
 
+
 async def do_full_copy():
     SRC_CHANNEL = await client.get_entity(PeerChannel(CHATS[0]))
-    # TARGET_CHAT = await client.get_entity(PeerChannel(list(CHANNEL_MAPPING.values())[0][0]))
-    BOT_CHAT = await client.get_entity("https://t.me/telemirror_test_bot")
+    # BOT_CHAT = await client.get_entity("https://t.me/telemirror_test_bot")
     DEST_CHANNEL = await bot.get_entity(PeerChannel(list(CHANNEL_MAPPING.values())[0][0]))
+    CLIENT_DEST_CHANNEL = await client.get_entity(PeerChannel(list(CHANNEL_MAPPING.values())[0][0]))
     amount_sent = 0
     albums = {}
+    sent = {}
     last_album = None
     async for message in client.iter_messages(SRC_CHANNEL, reverse=False):
         # skip if service messages
@@ -88,26 +94,38 @@ async def do_full_copy():
             sent_message = None
 
             # print(last_album, message.grouped_id)
-            if last_album != None and last_album != message.grouped_id:
+            if last_album is not None and last_album != message.grouped_id:
                 # our group_id is either a new album or it is None
                 # no matter which case, as we are progressing sequentially
                 # we are finished with this album i.e. got the whole album in memory
                 # https://stackoverflow.com/a/64114715/8608146
                 # send the album
                 # print(albums[last_album])
-                sent_message = await bot.send_message(
-                    DEST_CHANNEL,
+                if last_album in sent:
+                    # TODO duplicate?
+                    print("duplicate", last_album, message.grouped_id)
+                    continue
+                # no need to sort if reverse = True
+                albums[last_album] = sorted(
+                    albums[last_album], key=lambda a: a.id)
+                captions = list(map(lambda a: str(a.message), albums[last_album]))
+                # the next line was useful when debugging for send_file with album
+                # captions[-1] += "\nset via `client.send_file`"
+                # https://stackoverflow.com/a/67411533/8608146
+                sent_message = await client.send_file(
+                    CLIENT_DEST_CHANNEL,
                     # event.messages is a List - meaning we're sending an album
                     file=albums[last_album],
                     # get the caption message from the album
-                    message=albums[last_album][0].message,
+                    caption=captions,
                     silent=True,
                 )
+                sent[last_album] = True
+                del albums[last_album]
+                print("Sent message", last_album)
                 # print(sent_message.to_dict())
 
-            print(107)
             if message.grouped_id is not None:
-                print(message.grouped_id)
                 # if album bot can't handle it
                 # we have it in memory so skip for now
                 last_album = message.grouped_id
