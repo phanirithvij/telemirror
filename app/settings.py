@@ -42,7 +42,7 @@ if CM is not None:
 
 TIMEOUT_MIRRORING = float(environ.get('TIMEOUT_MIRRORING', '0.1'))
 # amount messages before timeout
-LIMIT_TO_WAIT = 20
+LIMIT_TO_WAIT = 50
 # auth session string: can be obtain by run login.py
 SESSION_STRING = environ.get('SESSION_STRING')
 BOT_TOKEN = environ.get('BOT_TOKEN')

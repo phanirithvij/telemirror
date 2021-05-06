@@ -2,16 +2,24 @@
 Make full copy of telegram channel
 """
 import asyncio
+import logging
+import pickle
 import time
 import traceback
+from pathlib import Path
 
+from telethon.errors.rpcerrorlist import MediaEmptyError
 from telethon.sessions import StringSession
-from telethon.sync import TelegramClient, events
+from telethon.sync import TelegramClient
 from telethon.tl.custom.button import Button
 from telethon.tl.types import MessageService, PeerChannel
+from telethon.tl.functions.messages import SearchRequest
+from telethon.tl.types import InputMessagesFilterPhotos, InputMessagesFilterEmpty, InputMessagesFilterPhotoVideo, InputMessagesFilterDocument
 
 from app.settings import (API_HASH, API_ID, BOT_TOKEN, CHANNEL_MAPPING, CHATS,
-                          LIMIT_TO_WAIT, SESSION_STRING)
+                          LIMIT_TO_WAIT, LOG_LEVEL, SESSION_STRING)
+
+logging.basicConfig(level=logging.getLevelName(LOG_LEVEL))
 
 print(CHATS, CHANNEL_MAPPING)
 
@@ -27,23 +35,23 @@ client = TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH)
 bot = TelegramClient("bot", API_ID, API_HASH).start(bot_token=BOT_TOKEN)
 
 
-@bot.on(events.NewMessage(pattern='/start'))
-async def start(event):
-    """Send a message when the command /start is issued."""
-    await event.respond('Hi!')
-    raise events.StopPropagation
+# @bot.on(events.NewMessage(pattern='/start'))
+# async def start(event):
+#     """Send a message when the command /start is issued."""
+#     await event.respond('Hi!')
+#     raise events.StopPropagation
 
 
-@bot.on(events.NewMessage)
-async def echo(event: events.NewMessage.Event):
-    """Echo the user message."""
-    try:
-        pass
-        # ignore for now
-        # print("bot new msg", event.message)
-        # await event.respond(event.message)
-    except Exception as e:
-        print(e)
+# @bot.on(events.NewMessage)
+# async def echo(event: events.NewMessage.Event):
+#     """Echo the user message."""
+#     try:
+#         pass
+#         # ignore for now
+#         # print("bot new msg", event.message)
+#         # await event.respond(event.message)
+#     except Exception as e:
+#         print(e)
 
 
 async def get_channels(owned=False):
@@ -56,6 +64,19 @@ async def get_channels(owned=False):
                 print(dialog.name, dialog.id)
 
 
+def write_last_message(message):
+    with open("lastf.bin", "wb+") as lastf:
+        pickle.dump(message.id, lastf)
+
+
+def read_last_message():
+    if not Path("lastf.bin").exists():
+        # default for min_id is 0 but not None
+        return 0
+    with open("lastf.bin", "rb") as lastf:
+        return pickle.load(lastf)
+
+
 async def do_full_copy():
     SRC_CHANNEL = await client.get_entity(PeerChannel(CHATS[0]))
     # BOT_CHAT = await client.get_entity("https://t.me/telemirror_test_bot")
@@ -65,12 +86,38 @@ async def do_full_copy():
     albums = {}
     sent = {}
     last_album = None
-    async for message in client.iter_messages(SRC_CHANNEL, reverse=False):
+    min_id = read_last_message()
+
+    # photos = await client(SearchRequest(
+    #     SRC_CHANNEL,  # peer
+    #     '',  # q
+    #     # InputMessagesFilterEmpty(),  # filter
+    #     # InputMessagesFilterPhotos(),  #   filter
+    #     InputMessagesFilterDocument(),  #   filter
+    #     # InputMessagesFilterPhotoVideo(),  # filter
+    #     None,  # min_date
+    #     None,  # max_date
+    #     0,  # offset_id
+    #     0,  # add_offset
+    #     0,  # limit
+    #     0,  # max_id
+    #     0,  # min_id
+    #     0  # hash
+    # ))
+    # print(photos.count)
+
+    # stats = await client.get_stats(SRC_CHANNEL)
+    # print(stats)
+
+    async for message in client.iter_messages(SRC_CHANNEL, reverse=True, min_id=min_id):
         # skip if service messages
         if isinstance(message, MessageService):
             continue
-        # print(message.message)
+        print(message.id, min_id)
         try:
+            if message.restriction_reason is not None:
+                print(message.restriction_reason, message.media)
+                # continue
             if message.grouped_id is not None:
                 # https://github.com/LonamiWebs/Telethon/issues/1216#issuecomment-507026612
                 if message.grouped_id in albums:
@@ -103,12 +150,14 @@ async def do_full_copy():
                 # print(albums[last_album])
                 if last_album in sent:
                     # TODO duplicate?
-                    print("duplicate", last_album, message.grouped_id)
+                    # print("Duplicate album?", last_album, message.grouped_id)
+                    sent_message = await try_bot_send(DEST_CHANNEL, CLIENT_DEST_CHANNEL, message, buttons)
                     continue
                 # no need to sort if reverse = True
                 albums[last_album] = sorted(
                     albums[last_album], key=lambda a: a.id)
-                captions = list(map(lambda a: str(a.message), albums[last_album]))
+                captions = list(
+                    map(lambda a: str(a.message), albums[last_album]))
                 # the next line was useful when debugging for send_file with album
                 # captions[-1] += "\nset via `client.send_file`"
                 # https://stackoverflow.com/a/67411533/8608146
@@ -120,11 +169,16 @@ async def do_full_copy():
                     caption=captions,
                     silent=True,
                 )
+                write_last_message(albums[last_album][-1])
+                # TODO pickle this? with an OrderedDict
+                # then at the beginning if exists in pickled dict continue
                 sent[last_album] = True
                 del albums[last_album]
-                print("Sent message", last_album)
+                print("Sent album", last_album)
                 # print(sent_message.to_dict())
 
+            print("Need to send message", (message.message[:75] + '...') if len(
+                message.message) > 75 else message.message)
             if message.grouped_id is not None:
                 # if album bot can't handle it
                 # we have it in memory so skip for now
@@ -132,11 +186,13 @@ async def do_full_copy():
                 continue
                 # sent_message = await client.send_message(BOT_CHAT, message)
             else:
+                sent_message = await try_bot_send(DEST_CHANNEL, CLIENT_DEST_CHANNEL, message, buttons)
                 # send the message to target channel with buttons
-                sent_message = await bot.send_message(DEST_CHANNEL, message, buttons=buttons, silent=True)
+                # sent_message = await bot.send_message(DEST_CHANNEL, message, buttons=buttons, silent=True)
+                # https://stackoverflow.com/a/2872519/8608146
                 # print(sent_message.to_dict())
-        except Exception as e:
-            print(e)
+        except Exception:
+            print(type(message), message.media)
             traceback.print_exc()
             # pass
         finally:
@@ -144,8 +200,8 @@ async def do_full_copy():
             if amount_sent >= LIMIT_TO_WAIT:
                 amount_sent = 0
                 time.sleep(1)
-                await client.disconnect()
-                break
+                # await client.disconnect()
+                # break
 
     print("Done")
 
@@ -162,6 +218,20 @@ async def main():
     await client.disconnect()
     await bot.disconnect()
 
+
+async def try_bot_send(DEST_CHANNEL, CLIENT_DEST_CHANNEL, message, buttons=None):
+    sent_message = None
+    try:
+        sent_message = await bot.send_message(DEST_CHANNEL, message, silent=True, buttons=buttons)
+    except MediaEmptyError as e:
+        # https://docs.pyrogram.org/faq#can-i-use-the-same-file-id-across-different-accounts
+        # will occur because of bot not having access to the file_id
+        print(e, message.media)
+        sent_message = await client.send_message(CLIENT_DEST_CHANNEL, message, silent=True)
+    except Exception as e:
+        print("general error", e, type(e))
+    write_last_message(message)
+    return sent_message
 
 if __name__ == "__main__":
     # executor = ProcessPoolExecutor(2)
