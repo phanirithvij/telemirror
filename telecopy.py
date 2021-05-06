@@ -88,6 +88,7 @@ async def do_full_copy():
     last_album = None
     min_id = read_last_message()
 
+    # https://stackoverflow.com/a/47967446/8608146
     # photos = await client(SearchRequest(
     #     SRC_CHANNEL,  # peer
     #     '',  # q
