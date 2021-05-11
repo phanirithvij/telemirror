@@ -91,3 +91,5 @@ ENV/
 *.session
 
 .vscode
+
+*.bin

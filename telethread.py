@@ -1,5 +1,5 @@
 """
-Make full copy of telegram channel
+Telgram forward removal for all messages in a thread
 """
 import asyncio
 import logging
@@ -13,10 +13,6 @@ from telethon.sessions import StringSession
 from telethon.sync import TelegramClient
 from telethon.tl.custom.button import Button
 from telethon.tl.types import MessageService, PeerChannel
-# from telethon.tl.functions.messages import SearchRequest
-# from telethon.tl.types import InputMessagesFilterPhotos,
-# InputMessagesFilterEmpty, InputMessagesFilterPhotoVideo,
-# InputMessagesFilterDocument
 
 from app.settings import (API_HASH, API_ID, BOT_TOKEN, CHANNEL_MAPPING, CHATS,
                           LIMIT_TO_WAIT, LOG_LEVEL, SESSION_STRING)
@@ -25,9 +21,11 @@ logging.basicConfig(level=logging.getLevelName(LOG_LEVEL))
 
 print(CHATS, CHANNEL_MAPPING)
 
-DistantLands = -1001223189644
-DistantLandsBackup = -1001235606765
-Currenttestchannel = -1001393493900  # (telemirror)
+DISTANT_LANDS = -1001223189644
+DISTANT_LANDS_BACKUP = -1001235606765
+CURRENT_TEST_CHANNEL = -1001393493900  # (telemirror)
+SAVED_MESSAGES_EXTREME = -1001179463665
+GAUTHAMS_LEECH = -1001463024136
 
 # user account
 client = TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH)
@@ -37,29 +35,20 @@ client = TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH)
 bot = TelegramClient("bot", API_ID, API_HASH).start(bot_token=BOT_TOKEN)
 
 
-# @bot.on(events.NewMessage(pattern='/start'))
-# async def start(event):
-#     """Send a message when the command /start is issued."""
-#     await event.respond('Hi!')
-#     raise events.StopPropagation
-
-
-# @bot.on(events.NewMessage)
-# async def echo(event: events.NewMessage.Event):
-#     """Echo the user message."""
-#     try:
-#         pass
-#         # ignore for now
-#         # print("bot new msg", event.message)
-#         # await event.respond(event.message)
-#     except Exception as e:
-#         print(e)
-
-
 async def get_channels(owned=False):
     # https://stackoverflow.com/a/62849271/8608146
     async for dialog in client.iter_dialogs():
         if dialog.is_channel:
+            if not owned:
+                print(dialog.name, dialog.id)
+            if owned and dialog.entity.admin_rights is not None:
+                print(dialog.name, dialog.id)
+
+
+async def get_groups(owned=False):
+    # https://stackoverflow.com/a/62849271/8608146
+    async for dialog in client.iter_dialogs():
+        if dialog.is_group:
             if not owned:
                 print(dialog.name, dialog.id)
             if owned and dialog.entity.admin_rights is not None:
@@ -80,43 +69,26 @@ def read_last_message():
 
 
 async def do_full_copy():
-    SRC_CHANNEL = await client.get_entity(PeerChannel(CHATS[0]))
+    src_channel = await client.get_entity("https://t.me/c/1463024136")
     # BOT_CHAT = await client.get_entity("https://t.me/telemirror_test_bot")
-    DEST_CHANNEL = await bot.get_entity(PeerChannel(list(CHANNEL_MAPPING.values())[0][0]))
-    CLIENT_DEST_CHANNEL = await client.get_entity(PeerChannel(list(CHANNEL_MAPPING.values())[0][0]))
+    dest_channel = await bot.get_entity(PeerChannel(list(CHANNEL_MAPPING.values())[0][0]))
+    client_dest_channel = await client.get_entity(PeerChannel(list(CHANNEL_MAPPING.values())[0][0]))
     amount_sent = 0
     albums = {}
     sent = {}
     last_album = None
     min_id = read_last_message()
 
-    # https://stackoverflow.com/a/47967446/8608146
-    # photos = await client(SearchRequest(
-    #     SRC_CHANNEL,  # peer
-    #     '',  # q
-    #     # InputMessagesFilterEmpty(),  # filter
-    #     # InputMessagesFilterPhotos(),  #   filter
-    #     InputMessagesFilterDocument(),  #   filter
-    #     # InputMessagesFilterPhotoVideo(),  # filter
-    #     None,  # min_date
-    #     None,  # max_date
-    #     0,  # offset_id
-    #     0,  # add_offset
-    #     0,  # limit
-    #     0,  # max_id
-    #     0,  # min_id
-    #     0  # hash
-    # ))
-    # print(photos.count)
+    thread_url = "https://t.me/c/1463024136/26211?thread=25347"
+    reply_to = thread_url.split("=")[-1]
+    print(int(reply_to))
 
-    # stats = await client.get_stats(SRC_CHANNEL)
-    # print(stats)
-
-    async for message in client.iter_messages(SRC_CHANNEL, reverse=True, min_id=min_id):
+    async for message in client.iter_messages(src_channel, reverse=True, min_id=min_id):
         # skip if service messages
         if isinstance(message, MessageService):
             continue
         print(message.id, min_id)
+        continue
         try:
             if message.restriction_reason is not None:
                 print(message.restriction_reason, message.media)
@@ -131,7 +103,7 @@ async def do_full_copy():
             # add a view origal_url button
             # https://stackoverflow.com/a/67406011/8608146
             origal_url = "https://t.me/c/{}/{}".format(
-                SRC_CHANNEL.id, message.id)
+                src_channel.id, message.id)
             button = Button.url("view original", origal_url)
             buttons = None
             if message.buttons is not None:
@@ -154,7 +126,7 @@ async def do_full_copy():
                 if last_album in sent:
                     # TODO duplicate?
                     # print("Duplicate album?", last_album, message.grouped_id)
-                    sent_message = await try_bot_send(DEST_CHANNEL, CLIENT_DEST_CHANNEL, message, buttons)
+                    sent_message = await try_bot_send(dest_channel, client_dest_channel, message, buttons)
                     continue
                 # no need to sort if reverse = True
                 albums[last_album] = sorted(
@@ -165,7 +137,7 @@ async def do_full_copy():
                 # captions[-1] += "\nset via `client.send_file`"
                 # https://stackoverflow.com/a/67411533/8608146
                 sent_message = await client.send_file(
-                    CLIENT_DEST_CHANNEL,
+                    client_dest_channel,
                     # event.messages is a List - meaning we're sending an album
                     file=albums[last_album],
                     # get the caption message from the album
@@ -190,7 +162,7 @@ async def do_full_copy():
                 # sent_message = await client.send_message(BOT_CHAT, message)
             else:
                 # send the message to target channel with buttons
-                sent_message = await try_bot_send(DEST_CHANNEL, CLIENT_DEST_CHANNEL, message, buttons)
+                sent_message = await try_bot_send(dest_channel, client_dest_channel, message, buttons)
                 # sent_message = await bot.send_message(DEST_CHANNEL, message, buttons=buttons, silent=True)
                 # https://stackoverflow.com/a/2872519/8608146
                 # print(sent_message.to_dict())
@@ -212,8 +184,11 @@ async def main():
         await client.connect()
     except OSError:
         print('Failed to connect')
+    # await get_groups()
+    # await get_groups(True)
     # await get_channels()
     # await get_channels(True)
+    # exit(0)
     await do_full_copy()
     await bot.run_until_disconnected()
     await client.disconnect()
