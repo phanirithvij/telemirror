@@ -13,8 +13,8 @@ from telethon.sessions import StringSession
 from telethon.sync import TelegramClient
 from telethon.tl.custom.button import Button
 from telethon.tl.types import MessageService, PeerChannel
-from telethon.tl.functions.messages import SearchRequest
-from telethon.tl.types import InputMessagesFilterPhotos, InputMessagesFilterEmpty, InputMessagesFilterPhotoVideo, InputMessagesFilterDocument
+# from telethon.tl.functions.messages import SearchRequest
+# from telethon.tl.types import InputMessagesFilterPhotos, InputMessagesFilterEmpty, InputMessagesFilterPhotoVideo, InputMessagesFilterDocument
 
 from app.settings import (API_HASH, API_ID, BOT_TOKEN, CHANNEL_MAPPING, CHATS,
                           LIMIT_TO_WAIT, LOG_LEVEL, SESSION_STRING)
@@ -187,8 +187,8 @@ async def do_full_copy():
                 continue
                 # sent_message = await client.send_message(BOT_CHAT, message)
             else:
-                sent_message = await try_bot_send(DEST_CHANNEL, CLIENT_DEST_CHANNEL, message, buttons)
                 # send the message to target channel with buttons
+                sent_message = await try_bot_send(DEST_CHANNEL, CLIENT_DEST_CHANNEL, message, buttons)
                 # sent_message = await bot.send_message(DEST_CHANNEL, message, buttons=buttons, silent=True)
                 # https://stackoverflow.com/a/2872519/8608146
                 # print(sent_message.to_dict())
@@ -201,8 +201,6 @@ async def do_full_copy():
             if amount_sent >= LIMIT_TO_WAIT:
                 amount_sent = 0
                 time.sleep(1)
-                # await client.disconnect()
-                # break
 
     print("Done")
 
@@ -225,6 +223,7 @@ async def try_bot_send(DEST_CHANNEL, CLIENT_DEST_CHANNEL, message, buttons=None)
     try:
         sent_message = await bot.send_message(DEST_CHANNEL, message, silent=True, buttons=buttons)
     except MediaEmptyError as e:
+        # https://stackoverflow.com/q/66178276/8608146
         # https://docs.pyrogram.org/faq#can-i-use-the-same-file-id-across-different-accounts
         # will occur because of bot not having access to the file_id
         print(e, message.media)
@@ -235,11 +234,5 @@ async def try_bot_send(DEST_CHANNEL, CLIENT_DEST_CHANNEL, message, buttons=None)
     return sent_message
 
 if __name__ == "__main__":
-    # executor = ProcessPoolExecutor(2)
-
     loop = asyncio.get_event_loop()
     loop.run_until_complete(main())
-    # boo = loop.run_in_executor(executor, main)
-    # baa = loop.run_in_executor(executor, bot.run_until_disconnected)
-
-    # loop.run_forever()
