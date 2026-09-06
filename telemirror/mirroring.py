@@ -9,7 +9,6 @@ from telethon.tl import types
 from config import DirectionConfig
 from telemirror._patch import (
     forward_messages,
-    patch_input_media_with_spoiler,
     send_file,
     send_message,
     set_album_event_timeout,
@@ -674,7 +673,6 @@ class Telemirror:
             api_system_version (`str`, optional): Telegram API system version. Defaults to `platform.uname().machine`
             api_app_version (`str`, optional): Telegram API app version. Defaults to `telethon.version.__version__`
         """
-        patch_input_media_with_spoiler()
         set_album_event_timeout(delay_sec=1.01)
 
         # Preparation for splitting receiver and sender
